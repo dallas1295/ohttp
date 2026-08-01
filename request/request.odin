@@ -7,6 +7,7 @@ Request :: struct {
 	path:    string,
 	version: string,
 	headers: map[string]string,
+    body: string
 }
 
 parse :: proc(r: []byte) -> Request {
@@ -27,10 +28,10 @@ parse :: proc(r: []byte) -> Request {
         }
         parts := strings.split(line, ": ")
         req.headers[parts[0]] = parts[1]
-
     }
 
-
+    body_pos := strings.index(str, "\r\n\r\n")
+    req.body = str[body_pos + 4:]
 
 	return req
 }
