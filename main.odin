@@ -1,16 +1,21 @@
 package main
 
+import "response"
 import "request"
 import "server"
 import "files"
 
-handler :: proc(r: request.Request) -> (b: string, sc: int, ct: string){
-    contents, type, ok := files.read(r.path)
+handler :: proc(w: ^response.Writer, r: request.Request) {
+    c, ct, ok := files.read(r.path)
 
     if ok {
-        return contents, 200, ct
+        response.header(w,"Content-Type", ct)
+        response.write(w, c)
+        return
+
     }
-    return "Not Found", 404, "text/plain"
+    response.status(w, 404)
+    response.write(w,"Not Found")
 }
 
 main :: proc() {
