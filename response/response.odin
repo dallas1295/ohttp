@@ -2,6 +2,13 @@ package response
 
 import "core:fmt"
 
+Writer :: struct {
+    status_code: int,
+    headers: map[string]string,
+    body: string,
+    chunked: bool
+}
+
 code_response :: proc(code: int) -> string {
     switch code {
     case 200: return "OK"
@@ -27,16 +34,41 @@ code_response :: proc(code: int) -> string {
     }
 }
 
-build :: proc(body: string, status_code: int, content_type := "text/plain", version := "1.1") -> string {
+new :: proc() -> Writer {
+    w := Writer{}
+    w.status_code = 200
+    w.headers = make(map[string]string)
+    w.headers["Content-Type"] = "text/plain"
+    return w
+}
+
+status :: proc(w: ^Writer, code := 200) {
+   w.status_code = code
+}
+
+header :: proc(w: ^Writer, key: string, value: string) {
+    w.headers[key] = value
+}
+
+write :: proc(w: ^Writer, data: string) {
+    w.body = fmt.tprintf("{}{}", w.body,  data)
+}
+
+build :: proc(w: ^Writer, version := "1.1") -> string {
     http := fmt.tprintf("HTTP/{}", version)
 
-    status_text := code_response(status_code)
-    status_line := fmt.tprintf("{} {} {}\r\n", http, status_code, status_text)
+    status_text := code_response(w.status_code)
+    status_line := fmt.tprintf("{} {} {}\r\n", http, w.status_code, status_text)
 
-    cl := fmt.tprintf("Content-Length: {}\r\n", len(body))
-    ct := fmt.tprintf("Content-Type: {}\r\n", content_type)
+    content_length := fmt.tprintf("Content-Length: {}\r\n", len(w.body))
 
-    output := fmt.tprintf("{}{}{}\r\n{}", status_line, cl, ct, body)
+    headers: string
+    for key, val in w.headers {
+        pair := fmt.tprintf("{}: {}\r\n", key, val)
+        headers = fmt.tprintf("{}{}", headers, pair)
+    }
 
-    return output
+    res := fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
+
+    return res
 }
