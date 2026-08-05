@@ -6,7 +6,7 @@ import "../socket"
 import "core:net"
 import "core:fmt"
 
-Handler :: proc(r: request.Request) -> (body: string, status_code: int, content_type: string)
+Handler :: proc(w: ^response.Writer, r: request.Request)
 
 listen :: proc(h: Handler) {
     s, err := socket.open()
@@ -36,8 +36,10 @@ listen :: proc(h: Handler) {
 			}
             req := request.parse(buf[:n])
 
-            body, status_code, content_type := h(req)
-            raw := response.build(body, status_code, content_type)
+            w := response.new()
+            h(&w, req)
+            raw := response.build(&w)
+            delete(w.headers)
 
 			net.send_tcp(c, transmute([]byte)raw)
             if req.headers["Connection"] == "close" {
