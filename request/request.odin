@@ -18,7 +18,18 @@ Parse_Result :: enum {
 	INCOMPLETE,
 }
 
-parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
+lower_ascii :: proc(s: string) -> string {
+	b := make([]byte, len(s))
+
+	for i in 0 ..< len(s) {
+		c := s[i]
+		b[i] = c + 32 if c >= 'A' && c <= 'Z' else c
+	}
+
+	return string(b)
+}
+
+parse_request :: proc(r: []byte) -> (Request, Parse_Result, int) {
 	req := Request{}
 	req.headers = make(map[string]string)
 
@@ -48,17 +59,26 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 		if len(parts) < 2 {
 			return req, .MALFORMED, 0
 		}
-		req.headers[parts[0]] = parts[1]
+		name := lower_ascii(parts[0])
+		existing, exists := req.headers[name]
+		if exists {
+			if name == "content-length" {
+				return req, .MALFORMED, 0
+			}
+			req.headers[name] = fmt.tprintf("{}, {}", existing, parts[1])
+		} else {
+			req.headers[name] = parts[1]
+		}
 	}
 
 	body_start := bounds + 4
 	consumed := body_start
 
-	if ch, ok := req.headers["Transfer-Encoding"]; ok {
+	if ch, ok := req.headers["transfer-encoding"]; ok {
 		if ch != "chunked" {
 			return req, .MALFORMED, 0
 		}
-		if _, ok := req.headers["Content-Length"]; ok {
+		if _, ok := req.headers["content-length"]; ok {
 			return req, .MALFORMED, 0
 		}
 
@@ -119,7 +139,7 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 		}
 
 	} else {
-		if cl, ok := req.headers["Content-Length"]; ok {
+		if cl, ok := req.headers["content-length"]; ok {
 			length, ok := strconv.parse_int(cl, 10)
 			if !ok || length < 0 {
 				return req, .MALFORMED, 0
