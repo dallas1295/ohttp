@@ -37,6 +37,8 @@ code_response :: proc(code: int) -> string {
 		return "Not Found"
 	case 405:
 		return "Method Not Allowed"
+	case 408:
+		return "Request Timeout"
 	case 418:
 		return "I'm a teapot"
 	case 429:
