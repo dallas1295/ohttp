@@ -35,7 +35,6 @@ listen :: proc(h: Handler) {
 			fmt.eprintln("error accepting tcp connection, closing socket")
 			continue}
 		fmt.printf("%v\n", src)
-		fmt.printf("Connection accepted\n")
 		handle_connection(c, src, h)
 	}
 }
@@ -52,6 +51,8 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 
 	buf: [4096]byte
 	used: int
+
+	req_start := time.now()
 
 	for {
 		mem.dynamic_arena_free_all(&arena)
@@ -99,7 +100,7 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 					net.close(c)
 					break
 				}
-				if req.headers["Connection"] == "close" {
+				if req.headers["connection"] == "close" {
 					net.close(c)
 					break
 				} else {
@@ -112,16 +113,27 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 
 		n, recv_err := net.recv_tcp(c, buf[used:])
 		if recv_err != nil || n == 0 {
-			if recv_err == .Would_Block {
-				fmt.printf("connection %v idle timeout\n", src.address)
-			} else {
-				fmt.printf("connection %v closed\n", src.address)
-				net.close(c)
-				break
-			}
+			fmt.printf("connection %v closed\n", src.address)
+			net.close(c)
+			break
 		}
 
 		used += n
+		dur := time.since(req_start)
+		max_dur := 30 * time.Second
+		if dur > max_dur {
+			w := response.new()
+			response.create(&w, 408)
+			raw := response.build(&w)
+
+			_, send_err := net.send_tcp(c, transmute([]byte)raw)
+			if send_err != nil {
+				fmt.eprintf("send error: %v\n", send_err)
+			}
+
+			net.close(c)
+			break
+		}
 	}
 
 }
