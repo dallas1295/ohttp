@@ -52,6 +52,7 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 			response.create(&w, 431)
 			raw := response.build(&w)
 			defer delete(w.headers)
+			defer delete(w.body)
 
 			_, send_err := net.send_tcp(c, transmute([]byte)raw)
 			defer delete(raw)
@@ -72,6 +73,7 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 				response.create(&w, 400)
 				raw := response.build(&w)
 				defer delete(w.headers)
+				defer delete(w.body)
 
 				_, send_err := net.send_tcp(c, transmute([]byte)raw)
 				defer delete(raw)
@@ -88,9 +90,11 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 				h(&w, req)
 				raw := response.build(&w)
 				defer delete(w.headers)
+				defer delete(w.body)
 
 				_, send_err := net.send_tcp(c, transmute([]byte)raw)
 				defer delete(raw)
+
 				if send_err != nil {
 					fmt.eprintf("send error: %v\n", send_err)
 					net.close(c)

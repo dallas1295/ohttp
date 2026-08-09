@@ -8,6 +8,12 @@ import "server"
 import "core:fmt"
 
 handler :: proc(w: ^response.Writer, r: request.Request) {
+	if r.path == "/chunked" {
+		response.chunk(w, "Hello")
+		// response.chunk(w, ", World\n")
+		return
+	}
+
 	path := r.path
 	if path == "/" {
 		path = "/index.html"

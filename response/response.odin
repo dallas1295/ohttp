@@ -1,13 +1,11 @@
 package response
 
 import "core:fmt"
-import "core:strings"
 
 Writer :: struct {
 	status_code: int,
 	headers:     map[string]string,
 	body:        string,
-	// NOTE: While chunking is scaffolded here; current, ohttp isn't set up to use it.
 	chunked:     bool,
 }
 
@@ -74,8 +72,11 @@ header :: proc(w: ^Writer, key: string, value: string) {
 	w.headers[key] = value
 }
 
-chunk :: proc(w: ^Writer, enabled := true) {
-	w.chunked = enabled
+chunk :: proc(w: ^Writer, data: string) {
+	w.chunked = true
+
+	hex := fmt.tprintf("{:x}", len(data))
+	w.body = fmt.tprintf("{}{}\r\n{}\r\n", w.body, hex, data)
 }
 
 write :: proc(w: ^Writer, data: string) {
@@ -83,7 +84,7 @@ write :: proc(w: ^Writer, data: string) {
 }
 
 create :: proc(w: ^Writer, code: int) {
-	w.body = code_response(code)
+	w.body = fmt.tprintf("{}", code_response(code))
 	w.status_code = code
 }
 
@@ -103,9 +104,7 @@ build :: proc(w: ^Writer, version := "1.1") -> string {
 
 	if w.chunked {
 		chunked := fmt.tprintf("Transfer-Encoding: chunked\r\n")
-		hex := fmt.tprintf("{:x}", len(w.body))
-		chunked_body := fmt.tprintf("{}\r\n{}\r\n0\r\n\r\n", hex, w.body)
-		res = fmt.tprintf("{}{}{}\r\n{}", status_line, chunked, headers, chunked_body)
+		res = fmt.tprintf("{}{}{}\r\n{}0\r\n\r\n", status_line, chunked, headers, w.body)
 	} else {
 		content_length := fmt.tprintf("Content-Length: {}\r\n", len(w.body))
 		res = fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
