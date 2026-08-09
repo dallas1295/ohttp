@@ -32,10 +32,8 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 
 
 	lines := strings.split(str[:bounds], "\r\n")
-	defer delete(lines)
 
 	rq := strings.split(lines[0], " ")
-	defer delete(rq)
 	if len(rq) < 3 {
 		return req, .MALFORMED, 0
 	}
@@ -46,7 +44,6 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 
 	for line in lines[1:] {
 		parts := strings.split(line, ": ")
-		defer delete(parts)
 
 		if len(parts) < 2 {
 			return req, .MALFORMED, 0
