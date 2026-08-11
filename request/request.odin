@@ -10,7 +10,7 @@ Request :: struct {
 	version: string,
 	headers: map[string]string,
 	body:    string,
-    query: string,
+	query:   string,
 }
 
 Parse_Result :: enum {
@@ -40,10 +40,10 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 
 	bounds := strings.index(str, "\r\n\r\n")
 	if bounds == -1 {
-        double := strings.index(str, "\n\n")
-        if double == -1 {
-            return req, .INCOMPLETE, 0
-        }
+		double := strings.index(str, "\n\n")
+		if double == -1 {
+			return req, .INCOMPLETE, 0
+		}
 		return req, .MALFORMED, 0
 	}
 
@@ -56,32 +56,38 @@ parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 	}
 
 	req.method = rq[0]
-    q_idx := strings.index(rq[1], "?")
-    if q_idx == -1 {
-        req.path = rq[1]
-    } else {
-        req.path = rq[1][:q_idx]
-        req.query = rq[1][q_idx + 1:]
-    }
-    req.version = rq[2]
+	q_idx := strings.index(rq[1], "?")
+	if q_idx == -1 {
+		req.path = rq[1]
+	} else {
+		req.path = rq[1][:q_idx]
+		req.query = rq[1][q_idx + 1:]
+	}
+	req.version = rq[2]
 
 	for line in lines[1:] {
-		parts := strings.split(line, ": ")
-
-		if len(parts) < 2 {
+		colon := strings.index(line, ":")
+		if colon == -1 {
 			return req, .MALFORMED, 0
 		}
-		name := lower_ascii(parts[0])
-		existing, exists := req.headers[name]
-		if exists {
+
+		name := lower_ascii(line[:colon])
+		value := strings.trim_space(line[colon + 1:])
+
+		if existing, exists := req.headers[name]; exists {
 			if name == "content-length" {
 				return req, .MALFORMED, 0
 			}
-			req.headers[name] = fmt.tprintf("{}, {}", existing, parts[1])
+			req.headers[name] = fmt.tprintf("{}, {}", existing, value)
 		} else {
-			req.headers[name] = parts[1]
+			req.headers[name] = value
 		}
 	}
+
+	if _, host := req.headers["host"]; req.version == "HTTP/1.1" && !host {
+		return req, .MALFORMED, 0
+	}
+
 
 	body_start := bounds + 4
 	consumed := body_start
