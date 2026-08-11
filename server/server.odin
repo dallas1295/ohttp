@@ -106,6 +106,7 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 				} else {
 					copy(buf[0:used - consumed], buf[consumed:used])
 					used -= consumed
+                    req_start = time.now()
 					continue
 				}
 			}

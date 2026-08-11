@@ -10,6 +10,7 @@ Request :: struct {
 	version: string,
 	headers: map[string]string,
 	body:    string,
+    query: string,
 }
 
 Parse_Result :: enum {
@@ -29,7 +30,8 @@ lower_ascii :: proc(s: string) -> string {
 	return string(b)
 }
 
-parse_request :: proc(r: []byte) -> (Request, Parse_Result, int) {
+
+parse :: proc(r: []byte) -> (Request, Parse_Result, int) {
 	req := Request{}
 	req.headers = make(map[string]string)
 
@@ -38,7 +40,11 @@ parse_request :: proc(r: []byte) -> (Request, Parse_Result, int) {
 
 	bounds := strings.index(str, "\r\n\r\n")
 	if bounds == -1 {
-		return req, .INCOMPLETE, 0
+        double := strings.index(str, "\n\n")
+        if double == -1 {
+            return req, .INCOMPLETE, 0
+        }
+		return req, .MALFORMED, 0
 	}
 
 
@@ -50,8 +56,14 @@ parse_request :: proc(r: []byte) -> (Request, Parse_Result, int) {
 	}
 
 	req.method = rq[0]
-	req.path = rq[1]
-	req.version = rq[2]
+    q_idx := strings.index(rq[1], "?")
+    if q_idx == -1 {
+        req.path = rq[1]
+    } else {
+        req.path = rq[1][:q_idx]
+        req.query = rq[1][q_idx + 1:]
+    }
+    req.version = rq[2]
 
 	for line in lines[1:] {
 		parts := strings.split(line, ": ")
