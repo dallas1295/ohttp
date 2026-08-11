@@ -1,26 +1,45 @@
 package response
 
+import "../date"
 import "core:fmt"
+import "core:time"
 
 Writer :: struct {
 	status_code: int,
 	headers:     map[string]string,
 	body:        string,
 	chunked:     bool,
+	head:        bool,
 }
 
 code_response :: proc(code: int) -> string {
 	switch code {
+	case 100:
+		return "Continue"
+	case 101:
+		return "Switching Protocols"
 	case 200:
 		return "OK"
 	case 201:
 		return "Created"
+	case 202:
+		return "Accepted"
+	case 203:
+		return "Non-Authoritative Information"
 	case 204:
 		return "No Content"
+	case 205:
+		return "Reset Content"
+	case 206:
+		return "Partial Content"
+	case 300:
+		return "Multiple Choices"
 	case 301:
 		return "Moved Permanently"
 	case 302:
 		return "Found"
+	case 303:
+		return "See Other"
 	case 304:
 		return "Not Modified"
 	case 307:
@@ -31,28 +50,66 @@ code_response :: proc(code: int) -> string {
 		return "Bad Request"
 	case 401:
 		return "Unauthorized"
+	case 402:
+		return "Payment Required"
 	case 403:
 		return "Forbidden"
 	case 404:
 		return "Not Found"
 	case 405:
 		return "Method Not Allowed"
+	case 406:
+		return "Not Acceptable"
+	case 407:
+		return "Proxy Authentication Required"
 	case 408:
 		return "Request Timeout"
+	case 409:
+		return "Conflict"
+	case 410:
+		return "Gone"
+	case 411:
+		return "Length Required"
+	case 412:
+		return "Precondition Failed"
+	case 413:
+		return "Content Too Large"
+	case 414:
+		return "URI Too Long"
+	case 415:
+		return "Unsupported Media Type"
+	case 416:
+		return "Range Not Satisfiable"
+	case 417:
+		return "Expectation Failed"
 	case 418:
 		return "I'm a teapot"
+	case 421:
+		return "Misdirected Request"
+	case 422:
+		return "Unprocessable Content"
+	case 426:
+		return "Upgrade Required"
 	case 429:
 		return "Too Many Requests"
 	case 431:
 		return "Request Header Fields Too Large"
+	case 451:
+		return "Unavailable For Legal Reasons"
 	case 500:
 		return "Internal Server Error"
+	case 501:
+		return "Not Implemented"
 	case 502:
 		return "Bad Gateway"
 	case 503:
 		return "Service Unavailable"
 	case 504:
 		return "Gateway Timeout"
+	case 505:
+		return "HTTP Version Not Supported"
+	case 511:
+		return "Network Authentication Required"
 	case:
 		return "Unknown"
 	}
@@ -62,6 +119,7 @@ new :: proc() -> Writer {
 	w := Writer{}
 	w.status_code = 200
 	w.headers = make(map[string]string)
+	w.headers["Date"] = date.get_date(time.now())
 	w.headers["Content-Type"] = "text/plain"
 	return w
 }
@@ -104,12 +162,24 @@ build :: proc(w: ^Writer, version := "1.1") -> string {
 
 	res: string
 
+	if w.status_code == 204 ||
+	   w.status_code == 304 ||
+	   (w.status_code >= 100 && w.status_code < 200) {
+		res = fmt.tprintf("{}{}\r\n", status_line, headers)
+		return res
+
+	}
+
 	if w.chunked {
 		chunked := fmt.tprintf("Transfer-Encoding: chunked\r\n")
 		res = fmt.tprintf("{}{}{}\r\n{}0\r\n\r\n", status_line, chunked, headers, w.body)
 	} else {
 		content_length := fmt.tprintf("Content-Length: {}\r\n", len(w.body))
-		res = fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
+		if w.head {
+			res = fmt.tprintf("{}{}{}\r\n", status_line, content_length, headers)
+		} else {
+			res = fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
+		}
 	}
 
 
