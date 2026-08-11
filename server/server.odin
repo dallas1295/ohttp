@@ -91,6 +91,9 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 			if ok == .OK {
 				w := response.new()
 				h(&w, req)
+				if req.method == "HEAD" {
+					w.head = true
+				}
 				raw := response.build(&w)
 
 				_, send_err := net.send_tcp(c, transmute([]byte)raw)
@@ -106,7 +109,7 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 				} else {
 					copy(buf[0:used - consumed], buf[consumed:used])
 					used -= consumed
-                    req_start = time.now()
+					req_start = time.now()
 					continue
 				}
 			}
