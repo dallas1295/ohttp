@@ -1,6 +1,7 @@
-package date
+package utils
 
 import "core:fmt"
+import "core:strings"
 import "core:time"
 
 http_weekdays := [7]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
@@ -34,4 +35,23 @@ get_date :: proc(t: time.Time) -> string {
 		minute,
 		second,
 	)
+}
+lower_ascii :: proc(s: string) -> string {
+	b := make([]byte, len(s))
+
+	for i in 0 ..< len(s) {
+		c := s[i]
+		b[i] = c + 32 if c >= 'A' && c <= 'Z' else c
+	}
+
+	return string(b)
+}
+
+has_token :: proc(value, token: string) -> bool {
+	for piece in strings.split(value, ",") {
+		if lower_ascii(strings.trim_space(piece)) == token {
+			return true
+		}
+	}
+	return false
 }

@@ -1,6 +1,6 @@
 package response
 
-import "../date"
+import "../utils"
 import "core:fmt"
 import "core:time"
 
@@ -10,6 +10,7 @@ Writer :: struct {
 	body:        string,
 	chunked:     bool,
 	head:        bool,
+	payload_len: int,
 }
 
 code_response :: proc(code: int) -> string {
@@ -119,7 +120,7 @@ new :: proc() -> Writer {
 	w := Writer{}
 	w.status_code = 200
 	w.headers = make(map[string]string)
-	w.headers["Date"] = date.get_date(time.now())
+	w.headers["Date"] = utils.get_date(time.now())
 	w.headers["Content-Type"] = "text/plain"
 	return w
 }
@@ -134,6 +135,7 @@ header :: proc(w: ^Writer, key: string, value: string) {
 
 chunk :: proc(w: ^Writer, data: string) {
 	w.chunked = true
+	w.payload_len += len(data)
 
 	hex := fmt.tprintf("{:x}", len(data))
 	w.body = fmt.tprintf("{}{}\r\n{}\r\n", w.body, hex, data)
@@ -144,8 +146,11 @@ write :: proc(w: ^Writer, data: string) {
 }
 
 create :: proc(w: ^Writer, code: int) {
-	w.body = fmt.tprintf("{}", code_response(code))
 	w.status_code = code
+	if code == 204 || code == 304 || code >= 100 && code < 200 {
+		return
+	}
+	w.body = code_response(code)
 }
 
 build :: proc(w: ^Writer, version := "1.1") -> string {
@@ -170,18 +175,17 @@ build :: proc(w: ^Writer, version := "1.1") -> string {
 
 	}
 
-	if w.chunked {
+	if w.head {
+		length := w.payload_len if w.chunked else len(w.body)
+		content_length := fmt.tprintf("Content-Length: {}\r\n", length)
+		res = fmt.tprintf("{}{}{}\r\n", status_line, content_length, headers)
+	} else if w.chunked {
 		chunked := fmt.tprintf("Transfer-Encoding: chunked\r\n")
 		res = fmt.tprintf("{}{}{}\r\n{}0\r\n\r\n", status_line, chunked, headers, w.body)
 	} else {
 		content_length := fmt.tprintf("Content-Length: {}\r\n", len(w.body))
-		if w.head {
-			res = fmt.tprintf("{}{}{}\r\n", status_line, content_length, headers)
-		} else {
-			res = fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
-		}
+		res = fmt.tprintf("{}{}{}\r\n{}", status_line, content_length, headers, w.body)
 	}
-
 
 	return res
 }
