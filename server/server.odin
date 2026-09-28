@@ -7,14 +7,24 @@ import "../utils"
 import "core:fmt"
 import "core:mem"
 import "core:net"
+import "core:thread"
 import "core:time"
+
+DEFAULT_MAX_CONNECTIONS :: 64
 
 shutdown: bool = false
 
 Handler :: proc(w: ^response.Writer, r: request.Request)
 
-listen :: proc(h: Handler) {
-	s, err := socket.open()
+Connection_Info :: struct {
+	c:   net.TCP_Socket,
+	src: net.Endpoint,
+	h:   Handler,
+}
+
+listen :: proc(h: Handler, port := 8080, max_connections := DEFAULT_MAX_CONNECTIONS) {
+	ep := socket.set_endpoint(port)
+	s, err := socket.open(ep)
 	if err != nil {
 		fmt.eprintf("Error opening socket: %v", err)
 		return
@@ -22,6 +32,9 @@ listen :: proc(h: Handler) {
 	defer socket.close(s)
 
 	register_signal_handler()
+
+	handles: [dynamic]^thread.Thread
+	defer delete(handles)
 
 	for {
 		if shutdown {
@@ -35,10 +48,43 @@ listen :: proc(h: Handler) {
 				break
 			}
 			fmt.eprintln("error accepting tcp connection, closing socket")
-			continue}
+			continue
+		}
 		fmt.printf("%v\n", src)
-		handle_connection(c, src, h)
+
+		i := 0
+		for t in handles {
+			if thread.is_done(t) {
+				thread.destroy(t)
+			} else {
+				handles[i] = t
+				i += 1
+			}
+		}
+		resize(&handles, i)
+
+		if len(handles) >= max_connections {
+			net.close(c)
+			continue
+		}
+
+
+		t := thread.create_and_start_with_poly_data(Connection_Info{c, src, h}, connection_worker)
+		if t == nil {
+			net.close(c)
+			continue
+		}
+		append(&handles, t)
 	}
+
+	thread.join_multiple(..handles[:])
+	for t in handles {
+		thread.destroy(t)
+	}
+}
+
+connection_worker :: proc(info: Connection_Info) {
+	handle_connection(info.c, info.src, info.h)
 }
 
 handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
@@ -46,15 +92,11 @@ handle_connection :: proc(c: net.TCP_Socket, src: net.Endpoint, h: Handler) {
 	defer delete(buf)
 
 
-	// Dynamic Allocator for collecting and releasing as necessary
 	arena: mem.Dynamic_Arena
 	mem.dynamic_arena_init(&arena)
 	defer mem.dynamic_arena_destroy(&arena)
 	context.allocator = mem.dynamic_arena_allocator(&arena)
 
-	// Two Dos defenses:
-	// - 5s recv timeout: kills idle connections
-	// - 30s request cap: kills slowloris attacks
 	net.set_option(c, .Receive_Timeout, 5 * time.Second)
 
 
